@@ -1,4 +1,4 @@
-const CACHE_NAME = 'globing-cache-v2';
+const CACHE_NAME = 'globing-cache-v4';
 const APP_SHELL = [
   './',
   './index.html',

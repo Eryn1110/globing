@@ -374,6 +374,12 @@ document.getElementById('btn-trip-menu').addEventListener('click', () => {
   tripDrawer.hidden = !tripDrawer.hidden;
 });
 
+document.getElementById('btn-quick-new-trip').addEventListener('click', () => {
+  formNewTrip.reset();
+  showView(viewNewTrip);
+  document.getElementById('input-trip-name').focus();
+});
+
 // ---------- Render: Trip detail ----------
 
 function renderTripDetail(trip) {
