@@ -107,6 +107,9 @@ function ensureDay(trip, dateStr) {
       }
       delete activity.cost;
     }
+    if (!activity.todos) {
+      activity.todos = [];
+    }
   });
   return day;
 }
@@ -137,6 +140,36 @@ async function migrateLegacyDays() {
           } catch (e) { /* no attachment for that slot — fine */ }
         }
         delete day.slots;
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveState();
+}
+
+// One-time upgrade from "one attachment per activity" (a single fixed
+// IndexedDB key) to "multiple ticket files per activity" (a list of
+// attachment ids, each with its own key). Any attachment found under the
+// old key gets moved to the new scheme so nothing is lost.
+async function migrateLegacyAttachments() {
+  let changed = false;
+  for (const trip of state.trips) {
+    for (const dateStr in trip.days) {
+      const day = trip.days[dateStr];
+      for (const activity of (day.activities || [])) {
+        if (activity.attachmentIds) continue; // already on the new scheme
+        activity.attachmentIds = [];
+        const oldKey = `activity-${trip.id}-${dateStr}-${activity.id}`;
+        try {
+          const record = await getAttachment(oldKey);
+          if (record) {
+            const newAttId = uid();
+            const newKey = `${oldKey}-${newAttId}`;
+            await saveAttachment(newKey, record.name, record.type, record.dataUrl);
+            await deleteAttachment(oldKey);
+            activity.attachmentIds.push(newAttId);
+          }
+        } catch (e) { /* no legacy attachment for that activity — fine */ }
         changed = true;
       }
     }
@@ -898,8 +931,9 @@ function buildActivityRow(trip, dateStr, day, activity) {
   row.className = 'activity-row';
   row.dataset.activityId = activity.id;
 
-  const timeCol = document.createElement('div');
-  timeCol.className = 'activity-time-col';
+  const header = document.createElement('div');
+  header.className = 'activity-header';
+
   const timeInput = document.createElement('input');
   timeInput.type = 'time';
   timeInput.className = 'activity-time-input';
@@ -909,16 +943,47 @@ function buildActivityRow(trip, dateStr, day, activity) {
     commitTripChange(trip);
     renderDayView(trip, dateStr); // re-sort into chronological order
   });
-  timeCol.appendChild(timeInput);
 
-  const body = document.createElement('div');
-  body.className = 'activity-body';
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'activity-delete';
+  deleteBtn.setAttribute('aria-label', 'Remove activity');
+  deleteBtn.textContent = '🗑';
+  deleteBtn.addEventListener('click', () => {
+    day.activities = day.activities.filter(a => a.id !== activity.id);
+    (activity.attachmentIds || []).forEach(attId => {
+      deleteAttachment(`activity-${trip.id}-${dateStr}-${activity.id}-${attId}`).catch(() => {});
+    });
+    commitTripChange(trip);
+    renderDayView(trip, dateStr);
+  });
 
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
   titleInput.className = 'activity-title';
-  titleInput.placeholder = 'What are you doing? e.g. Heading to Pearson';
+  titleInput.placeholder = 'Activity name';
   titleInput.value = activity.title || '';
+
+  header.appendChild(timeInput);
+  header.appendChild(titleInput);
+  header.appendChild(deleteBtn);
+
+  const addressInput = document.createElement('input');
+  addressInput.type = 'text';
+  addressInput.className = 'activity-address';
+  addressInput.placeholder = 'Address';
+  addressInput.value = activity.address || '';
+
+  const hoursInput = document.createElement('input');
+  hoursInput.type = 'text';
+  hoursInput.className = 'activity-hours';
+  hoursInput.placeholder = 'Operating hours';
+  hoursInput.value = activity.hours || '';
+
+  const addressRow = document.createElement('div');
+  addressRow.className = 'activity-address-row';
+  addressRow.appendChild(addressInput);
+  addressRow.appendChild(hoursInput);
 
   const ticketInput = document.createElement('input');
   ticketInput.type = 'text';
@@ -928,37 +993,161 @@ function buildActivityRow(trip, dateStr, day, activity) {
 
   const commitText = debounce(() => {
     activity.title = titleInput.value.trim();
+    activity.address = addressInput.value.trim();
+    activity.hours = hoursInput.value.trim();
     activity.ticket = ticketInput.value.trim();
     commitTripChange(trip);
   }, 300);
   titleInput.addEventListener('input', commitText);
+  addressInput.addEventListener('input', commitText);
+  hoursInput.addEventListener('input', commitText);
   ticketInput.addEventListener('input', commitText);
 
   const ticketRow = document.createElement('div');
   ticketRow.className = 'activity-ticket-row';
   ticketRow.appendChild(ticketInput);
-  ticketRow.appendChild(buildAttachControl(`activity-${trip.id}-${dateStr}-${activity.id}`));
 
-  body.appendChild(titleInput);
-  body.appendChild(ticketRow);
-  body.appendChild(buildPaymentsSection(trip, dateStr, activity));
+  row.appendChild(header);
+  row.appendChild(addressRow);
+  row.appendChild(buildTodosSection(trip, dateStr, activity));
+  row.appendChild(ticketRow);
+  row.appendChild(buildAttachmentsSection(trip, dateStr, activity));
+  row.appendChild(buildPaymentsSection(trip, dateStr, activity));
+  return row;
+}
 
-  const deleteBtn = document.createElement('button');
-  deleteBtn.type = 'button';
-  deleteBtn.className = 'activity-delete';
-  deleteBtn.setAttribute('aria-label', 'Remove activity');
-  deleteBtn.textContent = '🗑';
-  deleteBtn.addEventListener('click', () => {
-    day.activities = day.activities.filter(a => a.id !== activity.id);
-    deleteAttachment(`activity-${trip.id}-${dateStr}-${activity.id}`).catch(() => {});
+// Repeatable "to do" checklist under one activity — e.g. under "Go to
+// attraction X": Ride cable car / Buy souvenir / Eat abc. Each item has a
+// checkbox, text, and a remove button.
+function buildTodosSection(trip, dateStr, activity) {
+  const section = document.createElement('div');
+  section.className = 'todos-section';
+
+  function rerender() {
+    section.innerHTML = '';
+    (activity.todos || []).forEach((todo, idx) => {
+      section.appendChild(buildTodoRow(trip, activity, todo, idx, rerender));
+    });
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn-add-todo';
+    addBtn.textContent = activity.todos && activity.todos.length ? '+ Add another to-do' : '+ Add to-do';
+    addBtn.addEventListener('click', () => {
+      if (!activity.todos) activity.todos = [];
+      activity.todos.push({ id: uid(), text: '', done: false });
+      commitTripChange(trip);
+      rerender();
+      const inputs = section.querySelectorAll('.todo-text');
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+    section.appendChild(addBtn);
+  }
+
+  rerender();
+  return section;
+}
+
+function buildTodoRow(trip, activity, todo, idx, rerender) {
+  const row = document.createElement('div');
+  row.className = 'todo-row';
+
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.className = 'todo-checkbox';
+  checkbox.checked = !!todo.done;
+  checkbox.addEventListener('change', () => {
+    todo.done = checkbox.checked;
     commitTripChange(trip);
-    renderDayView(trip, dateStr);
+    textInput.classList.toggle('todo-done', todo.done);
   });
 
-  row.appendChild(timeCol);
-  row.appendChild(body);
-  row.appendChild(deleteBtn);
+  const textInput = document.createElement('input');
+  textInput.type = 'text';
+  textInput.className = 'todo-text' + (todo.done ? ' todo-done' : '');
+  textInput.placeholder = 'e.g. Ride the cable car';
+  textInput.value = todo.text || '';
+  textInput.addEventListener('input', debounce(() => {
+    todo.text = textInput.value.trim();
+    commitTripChange(trip);
+  }, 300));
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'todo-remove';
+  removeBtn.setAttribute('aria-label', 'Remove to-do');
+  removeBtn.textContent = '×';
+  removeBtn.addEventListener('click', () => {
+    activity.todos.splice(idx, 1);
+    commitTripChange(trip);
+    rerender();
+  });
+
+  row.appendChild(checkbox);
+  row.appendChild(textInput);
+  row.appendChild(removeBtn);
   return row;
+}
+
+// Multiple ticket files per activity — each attachment gets its own
+// IndexedDB key (activity-{tripId}-{dateStr}-{activityId}-{attachmentId});
+// activity.attachmentIds lists which ones belong to this activity.
+function buildAttachmentsSection(trip, dateStr, activity) {
+  const section = document.createElement('div');
+  section.className = 'attachments-section';
+
+  function rerender() {
+    section.innerHTML = '';
+    const chipRow = document.createElement('div');
+    chipRow.className = 'attachment-chip-row';
+    section.appendChild(chipRow);
+
+    (activity.attachmentIds || []).forEach(attId => {
+      const key = `activity-${trip.id}-${dateStr}-${activity.id}-${attId}`;
+      getAttachment(key).then(record => {
+        if (!record) return;
+        const chip = document.createElement('span');
+        chip.className = 'attach-chip';
+        chip.innerHTML = `<span>📎 ${escapeHtml(record.name)}</span>`;
+        chip.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openAttachment(key);
+        });
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'attach-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove attachment';
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          deleteAttachment(key).then(() => {
+            activity.attachmentIds = activity.attachmentIds.filter(id => id !== attId);
+            commitTripChange(trip);
+            rerender();
+          });
+        });
+        chip.appendChild(removeBtn);
+        chipRow.appendChild(chip);
+      });
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'attach-btn-labeled';
+    addBtn.textContent = '📎 Add ticket file';
+    addBtn.addEventListener('click', () => {
+      const newAttId = uid();
+      const key = `activity-${trip.id}-${dateStr}-${activity.id}-${newAttId}`;
+      requestAttach(key, () => {
+        if (!activity.attachmentIds) activity.attachmentIds = [];
+        activity.attachmentIds.push(newAttId);
+        commitTripChange(trip);
+        rerender();
+      });
+    });
+    section.appendChild(addBtn);
+  }
+
+  rerender();
+  return section;
 }
 
 // Builds the repeatable "who paid" list for one activity: each payment is a
@@ -1203,9 +1392,11 @@ state.trips.forEach(trip => subscribeSharedTrip(trip));
 
 // Upgrade any trips saved under the old fixed time-grid format, then
 // re-render whichever page is showing so the converted data appears.
-migrateLegacyDays().then(() => {
-  renderTripList();
-  if (state.activeTripId && getTrip(state.activeTripId)) {
-    renderTripDetail(getTrip(state.activeTripId));
-  }
-});
+migrateLegacyDays()
+  .then(() => migrateLegacyAttachments())
+  .then(() => {
+    renderTripList();
+    if (state.activeTripId && getTrip(state.activeTripId)) {
+      renderTripDetail(getTrip(state.activeTripId));
+    }
+  });

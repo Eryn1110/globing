@@ -34,7 +34,7 @@ Open it once while you have signal so the service worker can cache the app shell
 - **Trip list**: "+ New trip" for a fresh one, or "Have a code? Join a shared trip" to join one someone shared with you (see Sharing below).
 - **Inside a trip**, tap **⋯** for settings: dates, destinations, trip-level tickets/bookings, and sharing.
 - **Day tabs** across the top jump between days. "Mark day done" on a day turns its tab into a green checkmark.
-- Each day has a **notes** box, then a list of **activities** you add one at a time — each with a time, a title, a ticket reference, a 📎 for a ticket photo/PDF, and a repeatable **payments** list (who paid, how much, in what currency) for splitting costs across multiple people.
+- Each day has a **notes** box, then a list of **activities** you add one at a time — each with a compact time badge, a title, a repeatable **to-do checklist** for sub-steps under that stop (e.g. under "Go to attraction X": Ride the cable car, Buy souvenirs, Eat lunch), a ticket reference field, **multiple** 📎 ticket photos/PDFs per activity, and a repeatable **payments** list (who paid, how much, in what currency) for splitting costs across multiple people.
 - Trip settings (⋯) has a **"Who paid what"** summary — running totals per person across every payment in the whole trip.
 
 ## Sharing a trip with someone else (optional)

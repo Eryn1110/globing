@@ -775,12 +775,12 @@ body {
 
 .activity-row {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   background: var(--paper-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 12px;
+  padding: 12px 12px 12px 16px;
   position: relative;
   overflow: hidden;
 }
@@ -793,37 +793,29 @@ body {
   background: var(--accent);
 }
 
-.activity-time-col {
-  flex-shrink: 0;
-  padding-left: 6px;
+.activity-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .activity-time-input {
   font-family: var(--font-body);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 4px;
+  padding: 4px 3px;
   background: var(--paper);
   color: var(--ink);
-  width: 128px;
-  min-width: 128px;
+  width: 84px;
+  min-width: 84px;
 }
 
 .activity-time-input:focus {
   outline: 2px solid var(--blue);
   outline-offset: 1px;
-}
-
-.activity-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 4px;
 }
 
 .activity-title {
@@ -833,7 +825,8 @@ body {
   background: transparent;
   padding: 2px 2px;
   color: var(--ink);
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-body);
 }
 
@@ -846,6 +839,156 @@ body {
   outline: none;
   background: #EAF7EC;
   border-radius: 4px;
+}
+
+.activity-address-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.activity-address {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  border: none;
+  background: transparent;
+  padding: 2px 2px;
+  font-family: var(--font-body);
+}
+
+.activity-address::placeholder {
+  color: #A9BBB8;
+}
+
+.activity-address:focus {
+  outline: none;
+  background: #EAF7EC;
+  border-radius: 4px;
+}
+
+.activity-hours {
+  width: 108px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  text-align: right;
+  border: none;
+  background: transparent;
+  padding: 2px 2px;
+  font-family: var(--font-body);
+}
+
+.activity-hours::placeholder {
+  color: #A9BBB8;
+}
+
+.activity-hours:focus {
+  outline: none;
+  background: #EAF7EC;
+  border-radius: 4px;
+}
+
+.todos-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0;
+}
+
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.todo-checkbox {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.todo-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-family: var(--font-body);
+  border: none;
+  background: transparent;
+  padding: 2px 2px;
+  color: var(--ink);
+}
+
+.todo-text::placeholder {
+  color: #A9BBB8;
+}
+
+.todo-text:focus {
+  outline: none;
+  background: #EAF7EC;
+  border-radius: 4px;
+}
+
+.todo-text.todo-done {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.todo-remove {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 2px;
+  opacity: 0.6;
+}
+
+.todo-remove:active {
+  opacity: 1;
+}
+
+.btn-add-todo {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--accent-deep);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.attachments-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0;
+}
+
+.attachment-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attachment-chip-row:empty {
+  display: none;
+}
+
+.attach-btn-labeled {
+  align-self: flex-start;
+  background: none;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 5px 9px;
 }
 
 .activity-ticket-row {
@@ -1002,7 +1145,6 @@ body {
   flex-shrink: 0;
   padding: 4px;
   opacity: 0.6;
-  margin-top: 2px;
 }
 
 .activity-delete:active {
