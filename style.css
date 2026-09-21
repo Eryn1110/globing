@@ -268,6 +268,27 @@ body {
   color: #FFFFFF;
 }
 
+.btn-join-trip {
+  display: block;
+  margin: 0 16px 16px;
+  width: calc(100% - 32px);
+  background: transparent;
+  border: none;
+  padding: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue-deep);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.form-hint {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 0;
+  text-align: center;
+}
+
 .form-card {
   margin: 0 16px 16px;
   padding: 16px;
@@ -444,6 +465,58 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.share-code-block {
+  background: var(--paper);
+  border: 1px dashed var(--blue);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.share-code-label {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+}
+
+.share-code-value {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: var(--blue-deep);
+  margin: 0;
+}
+
+.sharing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sharing-actions .btn-small {
+  flex: 1;
+}
+
+.btn-danger-inline {
+  flex: 1;
+  margin-top: 0;
+  padding: 9px;
+  font-size: 12.5px;
+}
+
+.shared-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--blue-deep);
+  background: #DFF3FB;
+  border-radius: 999px;
+  padding: 1px 7px;
+  vertical-align: middle;
+  margin-left: 2px;
 }
 
 .ticket-row {
@@ -796,27 +869,122 @@ body {
   color: #A9BBB8;
 }
 
-.activity-cost {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--accent-deep);
+.payments-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.payment-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.payment-payer {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
-  padding: 2px 2px;
+  font-size: 12px;
   font-family: var(--font-body);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 7px;
+  background: var(--paper);
+  color: var(--ink);
 }
 
-.activity-cost::placeholder {
-  color: #A9BBB8;
-  font-weight: 400;
+.payment-amount {
+  width: 56px;
+  min-width: 0;
+  font-size: 12px;
+  font-family: var(--font-body);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 5px;
+  background: var(--paper);
+  color: var(--ink);
+  text-align: right;
 }
 
-.activity-cost:focus {
-  outline: none;
-  background: #EAF7EC;
-  border-radius: 4px;
+.payment-currency {
+  width: 46px;
+  min-width: 0;
+  font-size: 11px;
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 4px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.payment-payer:focus,
+.payment-amount:focus,
+.payment-currency:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.payment-remove {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 2px;
+  opacity: 0.6;
+}
+
+.payment-remove:active {
+  opacity: 1;
+}
+
+.btn-add-payment {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--blue-deep);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.expense-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.expense-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+}
+
+.expense-payer {
+  font-weight: 600;
+  font-size: 13.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-amount {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent-deep);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .activity-ticket:focus {

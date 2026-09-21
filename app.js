@@ -28,6 +28,15 @@ function saveState() {
   }
 }
 
+// Saves locally, and — only if this trip has sharing turned on — also
+// pushes the change up to Firestore so anyone else viewing the trip sees it.
+function commitTripChange(trip) {
+  saveState();
+  if (trip && trip.shared && trip.shareCode && typeof CloudSync !== 'undefined' && CloudSync.configured) {
+    CloudSync.pushTrip(trip);
+  }
+}
+
 let state = loadState();
 let activeDayDate = null; // date string currently shown in day view
 
@@ -79,13 +88,27 @@ function ensureDay(trip, dateStr) {
   if (!trip.days[dateStr]) {
     trip.days[dateStr] = { notes: '', activities: [], completed: false };
   }
-  if (!trip.days[dateStr].activities) {
-    trip.days[dateStr].activities = [];
+  const day = trip.days[dateStr];
+  if (!day.activities) {
+    day.activities = [];
   }
-  if (typeof trip.days[dateStr].completed !== 'boolean') {
-    trip.days[dateStr].completed = false;
+  if (typeof day.completed !== 'boolean') {
+    day.completed = false;
   }
-  return trip.days[dateStr];
+  // Upgrade from the old single freeform "cost" text field to a repeatable
+  // list of structured {payer, amount, currency} payments. The old text
+  // (e.g. "Ivan, 36 CAD") becomes a single payment with that text as the
+  // payer name, so nothing is silently lost — just left for manual tidy-up.
+  day.activities.forEach(activity => {
+    if (!activity.payments) {
+      activity.payments = [];
+      if (activity.cost && activity.cost.trim()) {
+        activity.payments.push({ id: uid(), payer: activity.cost.trim(), amount: '', currency: '' });
+      }
+      delete activity.cost;
+    }
+  });
+  return day;
 }
 
 // One-time upgrade for trips created before the switch from a fixed
@@ -102,7 +125,7 @@ async function migrateLegacyDays() {
           const slot = day.slots[time];
           if (!slot || (!slot.title && !slot.ticket)) continue;
           const newId = uid();
-          day.activities.push({ id: newId, time, title: slot.title || '', ticket: slot.ticket || '', cost: '' });
+          day.activities.push({ id: newId, time, title: slot.title || '', ticket: slot.ticket || '', payments: [] });
           const oldKey = `slot-${trip.id}-${dateStr}-${time}`;
           const newKey = `activity-${trip.id}-${dateStr}-${newId}`;
           try {
@@ -273,6 +296,7 @@ function openAttachment(key) {
 
 const viewTrips = document.getElementById('view-trips');
 const viewNewTrip = document.getElementById('view-new-trip');
+const viewJoinTrip = document.getElementById('view-join-trip');
 const viewTrip = document.getElementById('view-trip');
 const tripListEl = document.getElementById('trip-list');
 const emptyStateEl = document.getElementById('empty-state');
@@ -285,7 +309,7 @@ const dayViewEl = document.getElementById('day-view');
 const tripDrawer = document.getElementById('trip-drawer');
 
 function showView(view) {
-  [viewTrips, viewNewTrip, viewTrip].forEach(v => { v.hidden = (v !== view); });
+  [viewTrips, viewNewTrip, viewJoinTrip, viewTrip].forEach(v => { v.hidden = (v !== view); });
 }
 
 // ---------- Render: Trip list ----------
@@ -301,7 +325,7 @@ function renderTripList() {
 
     const info = document.createElement('div');
     info.innerHTML = `
-      <p class="trip-card-name">${escapeHtml(trip.name)}</p>
+      <p class="trip-card-name">${escapeHtml(trip.name)}${trip.shared ? ' <span class="shared-badge">🔗 Shared</span>' : ''}</p>
       <p class="trip-card-meta">${formatDateShort(trip.startDate)} – ${formatDateShort(trip.endDate)} · ${getDaysArray(trip.startDate, trip.endDate).length} days${trip.destinations.length ? ' · ' + trip.destinations.map(escapeHtml).join(', ') : ''}</p>
     `;
 
@@ -371,7 +395,9 @@ formNewTrip.addEventListener('submit', (e) => {
     endDate: end,
     destinations: [],
     tickets: [],
-    days: {}
+    days: {},
+    shared: false,
+    shareCode: null
   };
   getDaysArray(start, end).forEach(d => ensureDay(trip, d));
   state.trips.push(trip);
@@ -401,12 +427,66 @@ document.getElementById('btn-back').addEventListener('click', () => {
 
 document.getElementById('btn-trip-menu').addEventListener('click', () => {
   tripDrawer.hidden = !tripDrawer.hidden;
+  if (!tripDrawer.hidden) {
+    const trip = getTrip(state.activeTripId);
+    if (trip) renderDrawer(trip); // refresh so the expense summary is never stale
+  }
 });
 
 document.getElementById('btn-quick-new-trip').addEventListener('click', () => {
   formNewTrip.reset();
   showView(viewNewTrip);
   document.getElementById('input-trip-name').focus();
+});
+
+// ---------- Join a shared trip ----------
+
+const formJoinTrip = document.getElementById('form-join-trip');
+
+document.getElementById('btn-join-trip').addEventListener('click', () => {
+  formJoinTrip.reset();
+  document.getElementById('join-trip-hint').textContent = '';
+  showView(viewJoinTrip);
+  document.getElementById('input-join-code').focus();
+});
+
+document.getElementById('btn-cancel-join-trip').addEventListener('click', () => {
+  showView(viewTrips);
+});
+
+formJoinTrip.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const hint = document.getElementById('join-trip-hint');
+  const codeInput = document.getElementById('input-join-code');
+  const code = codeInput.value.trim().toUpperCase();
+  if (!code) return;
+
+  if (typeof CloudSync === 'undefined' || !CloudSync.configured) {
+    hint.textContent = 'Cloud sharing isn\u2019t set up for this deployment yet.';
+    return;
+  }
+
+  hint.textContent = 'Looking for that trip…';
+  try {
+    const remote = await CloudSync.fetchTripOnce(code);
+    if (!remote) {
+      hint.textContent = 'No trip found with that code — double-check and try again.';
+      return;
+    }
+    const localId = uid();
+    const trip = Object.assign({}, remote, { id: localId, shared: true, shareCode: code });
+    if (!trip.days) trip.days = {};
+    getDaysArray(trip.startDate, trip.endDate).forEach(d => ensureDay(trip, d));
+    state.trips.push(trip);
+    saveState();
+    subscribeSharedTrip(trip);
+    showView(viewTrips);
+    renderTripList();
+    openTrip(localId);
+  } catch (err) {
+    console.error(err);
+    hint.textContent = 'Something went wrong joining that trip.';
+  }
 });
 
 // ---------- Render: Trip detail ----------
@@ -434,7 +514,7 @@ function renderDrawer(trip) {
     chip.innerHTML = `${escapeHtml(dest)} <button aria-label="Remove">×</button>`;
     chip.querySelector('button').addEventListener('click', () => {
       trip.destinations.splice(i, 1);
-      saveState();
+      commitTripChange(trip);
       renderDrawer(trip);
       renderTripDetail(trip);
     });
@@ -465,7 +545,7 @@ function renderDrawer(trip) {
     removeBtn.addEventListener('click', () => {
       trip.tickets.splice(i, 1);
       deleteAttachment(attachKey).catch(() => {});
-      saveState();
+      commitTripChange(trip);
       renderDrawer(trip);
     });
     actions.appendChild(removeBtn);
@@ -474,6 +554,120 @@ function renderDrawer(trip) {
     row.appendChild(actions);
     ticketList.appendChild(row);
   });
+
+  renderExpenseSummary(trip);
+  renderSharingPanel(trip);
+}
+
+// Builds the Sharing section of the drawer: "Share this trip" when not yet
+// shared, or the code + copy/stop controls once it is. Does nothing (shows a
+// note instead) if no Firebase config has been set up for this deployment.
+function renderSharingPanel(trip) {
+  const panel = document.getElementById('sharing-panel');
+  panel.innerHTML = '';
+
+  if (typeof CloudSync === 'undefined' || !CloudSync.configured) {
+    const p = document.createElement('p');
+    p.className = 'drawer-hint';
+    p.textContent = 'Cloud sharing isn\u2019t set up for this deployment yet — see the README for how to add it.';
+    panel.appendChild(p);
+    return;
+  }
+
+  if (!trip.shared) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-small';
+    btn.textContent = 'Share this trip';
+    btn.addEventListener('click', () => {
+      trip.shared = true;
+      trip.shareCode = CloudSync.generateCode();
+      commitTripChange(trip);
+      subscribeSharedTrip(trip);
+      renderDrawer(trip);
+    });
+    panel.appendChild(btn);
+    return;
+  }
+
+  const codeBlock = document.createElement('div');
+  codeBlock.className = 'share-code-block';
+  codeBlock.innerHTML = `
+    <p class="share-code-label">Trip code — share it with your travel companion</p>
+    <p class="share-code-value">${trip.shareCode}</p>
+  `;
+  panel.appendChild(codeBlock);
+
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'sharing-actions';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'btn-small';
+  copyBtn.textContent = 'Copy code';
+  copyBtn.addEventListener('click', () => {
+    const code = trip.shareCode;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(code)
+        .then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy code'; }, 1500);
+        })
+        .catch(() => alert(`Code: ${code}`));
+    } else {
+      alert(`Code: ${code}`);
+    }
+  });
+
+  const stopBtn = document.createElement('button');
+  stopBtn.type = 'button';
+  stopBtn.className = 'btn-danger btn-danger-inline';
+  stopBtn.textContent = 'Stop syncing on this device';
+  stopBtn.addEventListener('click', () => {
+    if (!confirm('Stop syncing this trip on this device? Your travel companion keeps their copy — this device keeps its current data but won\u2019t update anymore.')) return;
+    CloudSync.unsubscribe(trip.shareCode);
+    trip.shared = false;
+    trip.shareCode = null;
+    saveState();
+    renderDrawer(trip);
+  });
+
+  actionsRow.appendChild(copyBtn);
+  actionsRow.appendChild(stopBtn);
+  panel.appendChild(actionsRow);
+}
+
+// Starts (or restarts) a live Firestore listener for a shared trip. Safe to
+// call repeatedly — CloudSync.subscribe replaces any existing listener for
+// the same code. No-ops entirely if sharing isn't configured.
+function subscribeSharedTrip(trip) {
+  if (typeof CloudSync === 'undefined' || !CloudSync.configured) return;
+  if (!trip.shared || !trip.shareCode) return;
+  CloudSync.subscribe(trip.shareCode, (remoteData) => handleRemoteTripUpdate(trip.shareCode, remoteData));
+}
+
+// Fires when a shared trip changes on someone else's phone. Merges the
+// remote data in, keeping this device's own local trip id (attachments are
+// keyed by it) and re-renders — unless the person is actively typing in the
+// day view right now, in which case we save quietly and let the next
+// natural render pick it up, so we don't yank focus mid-keystroke.
+function handleRemoteTripUpdate(shareCode, remoteData) {
+  const trip = state.trips.find(t => t.shareCode === shareCode);
+  if (!trip) return;
+  const localId = trip.id;
+  Object.assign(trip, remoteData, { id: localId, shared: true, shareCode });
+  if (!trip.days) trip.days = {};
+  getDaysArray(trip.startDate, trip.endDate).forEach(d => ensureDay(trip, d));
+  saveState();
+
+  const typing = document.activeElement && dayViewEl.contains(document.activeElement);
+
+  if (state.activeTripId === localId && !viewTrip.hidden && !typing) {
+    renderTripDetail(trip);
+  }
+  if (!viewTrips.hidden) {
+    renderTripList();
+  }
 }
 
 // Builds a small "attach ticket file" control: shows a 📎 button when empty,
@@ -532,7 +726,7 @@ function buildAttachControl(key) {
 document.getElementById('edit-trip-name').addEventListener('change', (e) => {
   const trip = getTrip(state.activeTripId);
   trip.name = e.target.value.trim() || trip.name;
-  saveState();
+  commitTripChange(trip);
   renderTripDetail(trip);
 });
 
@@ -555,7 +749,7 @@ function updateTripDates(newStart, newEnd) {
   trip.startDate = start;
   trip.endDate = end;
   getDaysArray(start, end).forEach(d => ensureDay(trip, d));
-  saveState();
+  commitTripChange(trip);
   if (!trip.days[activeDayDate]) activeDayDate = start;
   renderTripDetail(trip);
 }
@@ -566,7 +760,7 @@ document.getElementById('btn-add-destination').addEventListener('click', () => {
   if (!val) return;
   const trip = getTrip(state.activeTripId);
   trip.destinations.push(val);
-  saveState();
+  commitTripChange(trip);
   input.value = '';
   renderDrawer(trip);
   renderTripDetail(trip);
@@ -582,7 +776,7 @@ document.getElementById('btn-add-ticket').addEventListener('click', () => {
   if (!label) return;
   const trip = getTrip(state.activeTripId);
   trip.tickets.push({ id: uid(), label, detail: detailInput.value.trim() });
-  saveState();
+  commitTripChange(trip);
   labelInput.value = '';
   detailInput.value = '';
   renderDrawer(trip);
@@ -641,7 +835,7 @@ function renderDayView(trip, dateStr) {
   doneToggle.textContent = day.completed ? '✓ Day done' : 'Mark day done';
   doneToggle.addEventListener('click', () => {
     day.completed = !day.completed;
-    saveState();
+    commitTripChange(trip);
     renderDayView(trip, dateStr);
     renderDayTabs(trip);
   });
@@ -659,7 +853,7 @@ function renderDayView(trip, dateStr) {
   notesArea.value = day.notes || '';
   notesArea.addEventListener('input', debounce(() => {
     day.notes = notesArea.value;
-    saveState();
+    commitTripChange(trip);
   }, 300));
   notesBlock.appendChild(notesArea);
   dayViewEl.appendChild(notesBlock);
@@ -686,9 +880,9 @@ function renderDayView(trip, dateStr) {
   addBtn.textContent = '+ Add activity';
   addBtn.addEventListener('click', () => {
     const lastTime = sorted.length ? sorted[sorted.length - 1].time : '09:00';
-    const newActivity = { id: uid(), time: lastTime, title: '', ticket: '', cost: '' };
+    const newActivity = { id: uid(), time: lastTime, title: '', ticket: '', payments: [] };
     day.activities.push(newActivity);
-    saveState();
+    commitTripChange(trip);
     renderDayView(trip, dateStr);
     // Focus the newly added row's title field.
     const row = dayViewEl.querySelector(`[data-activity-id="${newActivity.id}"] .activity-title`);
@@ -712,7 +906,7 @@ function buildActivityRow(trip, dateStr, day, activity) {
   timeInput.value = activity.time || '09:00';
   timeInput.addEventListener('change', () => {
     activity.time = timeInput.value;
-    saveState();
+    commitTripChange(trip);
     renderDayView(trip, dateStr); // re-sort into chronological order
   });
   timeCol.appendChild(timeInput);
@@ -732,30 +926,22 @@ function buildActivityRow(trip, dateStr, day, activity) {
   ticketInput.placeholder = 'Ticket / booking ref';
   ticketInput.value = activity.ticket || '';
 
-  const costInput = document.createElement('input');
-  costInput.type = 'text';
-  costInput.className = 'activity-cost';
-  costInput.placeholder = 'Cost, e.g. Ivan, 36 CAD';
-  costInput.value = activity.cost || '';
-
   const commitText = debounce(() => {
     activity.title = titleInput.value.trim();
     activity.ticket = ticketInput.value.trim();
-    activity.cost = costInput.value.trim();
-    saveState();
+    commitTripChange(trip);
   }, 300);
   titleInput.addEventListener('input', commitText);
   ticketInput.addEventListener('input', commitText);
-  costInput.addEventListener('input', commitText);
 
   const ticketRow = document.createElement('div');
   ticketRow.className = 'activity-ticket-row';
   ticketRow.appendChild(ticketInput);
-  ticketRow.appendChild(costInput);
   ticketRow.appendChild(buildAttachControl(`activity-${trip.id}-${dateStr}-${activity.id}`));
 
   body.appendChild(titleInput);
   body.appendChild(ticketRow);
+  body.appendChild(buildPaymentsSection(trip, dateStr, activity));
 
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
@@ -765,7 +951,7 @@ function buildActivityRow(trip, dateStr, day, activity) {
   deleteBtn.addEventListener('click', () => {
     day.activities = day.activities.filter(a => a.id !== activity.id);
     deleteAttachment(`activity-${trip.id}-${dateStr}-${activity.id}`).catch(() => {});
-    saveState();
+    commitTripChange(trip);
     renderDayView(trip, dateStr);
   });
 
@@ -773,6 +959,164 @@ function buildActivityRow(trip, dateStr, day, activity) {
   row.appendChild(body);
   row.appendChild(deleteBtn);
   return row;
+}
+
+// Builds the repeatable "who paid" list for one activity: each payment is a
+// payer name, an amount, and a currency, with its own remove button, plus
+// an "+ Add payment" control. Re-renders itself in place on any change so
+// the parent activity row doesn't need a full re-render (which would drop
+// focus mid-edit).
+function buildPaymentsSection(trip, dateStr, activity) {
+  const section = document.createElement('div');
+  section.className = 'payments-section';
+
+  function rerender() {
+    section.innerHTML = '';
+    activity.payments.forEach((payment, idx) => {
+      section.appendChild(buildPaymentRow(trip, payment, idx, activity, rerender));
+    });
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn-add-payment';
+    addBtn.textContent = activity.payments.length ? '+ Add another payment' : '+ Add payment';
+    addBtn.addEventListener('click', () => {
+      activity.payments.push({ id: uid(), payer: '', amount: '', currency: trip.lastCurrency || '' });
+      commitTripChange(trip);
+      rerender();
+      const lastRow = section.querySelectorAll('.payment-payer');
+      if (lastRow.length) lastRow[lastRow.length - 1].focus();
+    });
+    section.appendChild(addBtn);
+    refreshPayerDatalist(trip);
+  }
+
+  rerender();
+  return section;
+}
+
+function buildPaymentRow(trip, payment, idx, activity, rerender) {
+  const row = document.createElement('div');
+  row.className = 'payment-row';
+
+  const payerInput = document.createElement('input');
+  payerInput.type = 'text';
+  payerInput.className = 'payment-payer';
+  payerInput.placeholder = 'Who paid';
+  payerInput.value = payment.payer || '';
+  payerInput.setAttribute('list', 'payer-names');
+
+  const amountInput = document.createElement('input');
+  amountInput.type = 'number';
+  amountInput.inputMode = 'decimal';
+  amountInput.step = '0.01';
+  amountInput.min = '0';
+  amountInput.className = 'payment-amount';
+  amountInput.placeholder = '0';
+  amountInput.value = payment.amount === undefined ? '' : payment.amount;
+
+  const currencyInput = document.createElement('input');
+  currencyInput.type = 'text';
+  currencyInput.className = 'payment-currency';
+  currencyInput.placeholder = 'CAD';
+  currencyInput.maxLength = 6;
+  currencyInput.value = payment.currency || '';
+
+  const commit = debounce(() => {
+    payment.payer = payerInput.value.trim();
+    payment.amount = amountInput.value;
+    payment.currency = currencyInput.value.trim().toUpperCase();
+    if (payment.currency) trip.lastCurrency = payment.currency;
+    commitTripChange(trip);
+    refreshPayerDatalist(trip);
+  }, 300);
+  payerInput.addEventListener('input', commit);
+  amountInput.addEventListener('input', commit);
+  currencyInput.addEventListener('input', commit);
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'payment-remove';
+  removeBtn.setAttribute('aria-label', 'Remove payment');
+  removeBtn.textContent = '×';
+  removeBtn.addEventListener('click', () => {
+    activity.payments.splice(idx, 1);
+    commitTripChange(trip);
+    rerender();
+  });
+
+  row.appendChild(payerInput);
+  row.appendChild(amountInput);
+  row.appendChild(currencyInput);
+  row.appendChild(removeBtn);
+  return row;
+}
+
+// Keeps a single shared <datalist> of every payer name used anywhere in the
+// current trip, so payer inputs can suggest names already typed once.
+function refreshPayerDatalist(trip) {
+  let datalist = document.getElementById('payer-names');
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = 'payer-names';
+    document.body.appendChild(datalist);
+  }
+  const names = new Set();
+  Object.values(trip.days).forEach(day => {
+    (day.activities || []).forEach(a => (a.payments || []).forEach(p => {
+      if (p.payer) names.add(p.payer);
+    }));
+  });
+  datalist.innerHTML = '';
+  names.forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    datalist.appendChild(opt);
+  });
+}
+
+// Totals every payment in the trip by payer, split by currency (currencies
+// aren't converted/summed together — "120 CAD, 40 USD" stays two figures).
+function computeExpenseSummary(trip) {
+  const totals = {};
+  Object.values(trip.days).forEach(day => {
+    (day.activities || []).forEach(activity => {
+      (activity.payments || []).forEach(p => {
+        const amount = parseFloat(p.amount);
+        if (!p.payer || isNaN(amount)) return;
+        const currency = (p.currency || '').trim();
+        if (!totals[p.payer]) totals[p.payer] = {};
+        totals[p.payer][currency] = (totals[p.payer][currency] || 0) + amount;
+      });
+    });
+  });
+  return totals;
+}
+
+function renderExpenseSummary(trip) {
+  const container = document.getElementById('expense-summary');
+  if (!container) return;
+  container.innerHTML = '';
+  const totals = computeExpenseSummary(trip);
+  const payers = Object.keys(totals).sort();
+
+  if (payers.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'drawer-hint';
+    p.textContent = 'No payments logged yet — add one from any activity\u2019s "+ Add payment".';
+    container.appendChild(p);
+    return;
+  }
+
+  payers.forEach(payer => {
+    const row = document.createElement('div');
+    row.className = 'expense-row';
+    const parts = Object.entries(totals[payer]).map(([currency, amount]) => {
+      const rounded = Math.round(amount * 100) / 100;
+      return currency ? `${rounded} ${currency}` : `${rounded}`;
+    });
+    row.innerHTML = `<span class="expense-payer">${escapeHtml(payer)}</span><span class="expense-amount">${parts.join(', ')}</span>`;
+    container.appendChild(row);
+  });
 }
 
 function debounce(fn, wait) {
@@ -815,6 +1159,11 @@ document.getElementById('import-file').addEventListener('change', (e) => {
         const existingIds = new Set(state.trips.map(t => t.id));
         imported.trips.forEach(t => {
           if (existingIds.has(t.id)) t.id = uid();
+          // Don't carry sharing state across an import — re-share explicitly
+          // if wanted, so we never accidentally start pushing to someone
+          // else's live trip code.
+          t.shared = false;
+          t.shareCode = null;
           state.trips.push(t);
         });
       } else {
@@ -847,6 +1196,10 @@ renderTripList();
 if (state.activeTripId && getTrip(state.activeTripId)) {
   openTrip(state.activeTripId);
 }
+
+// Start live listeners for any trips already shared, so updates from a
+// travel companion arrive even while sitting on the trip list.
+state.trips.forEach(trip => subscribeSharedTrip(trip));
 
 // Upgrade any trips saved under the old fixed time-grid format, then
 // re-render whichever page is showing so the converted data appears.

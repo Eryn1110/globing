@@ -41,6 +41,28 @@
       </div>
 
       <button id="btn-new-trip" class="btn-new-trip">+ New trip</button>
+      <button id="btn-join-trip" class="btn-join-trip">Have a code? Join a shared trip</button>
+    </div>
+  </section>
+
+  <!-- ============ JOIN SHARED TRIP VIEW ============ -->
+  <section id="view-join-trip" class="view" hidden>
+    <header class="topbar">
+      <button id="btn-cancel-join-trip" class="icon-btn" aria-label="Back to trips">←</button>
+      <div class="trip-heading">
+        <h1>Join a shared trip</h1>
+      </div>
+    </header>
+
+    <div class="scroll-area">
+      <form id="form-join-trip" class="card form-card">
+        <label class="field">
+          <span>Trip code</span>
+          <input type="text" id="input-join-code" placeholder="e.g. 7K2QXM" autocapitalize="characters" autocomplete="off" required>
+        </label>
+        <button type="submit" class="btn-primary">Join trip</button>
+        <p class="form-hint" id="join-trip-hint"></p>
+      </form>
     </div>
   </section>
 
@@ -127,6 +149,18 @@
           </div>
         </section>
 
+        <section class="drawer-section">
+          <p class="drawer-label">Who paid what</p>
+          <p class="drawer-hint">Totals across every payment logged on any activity in this trip.</p>
+          <div id="expense-summary" class="expense-summary"></div>
+        </section>
+
+        <section class="drawer-section">
+          <p class="drawer-label">Sharing</p>
+          <p class="drawer-hint">Share this trip with a travel companion. Notes, activities, and costs sync between phones — ticket photos stay local to whichever phone attached them.</p>
+          <div id="sharing-panel"></div>
+        </section>
+
         <button id="btn-delete-trip" class="btn-danger">Delete this trip</button>
       </div>
     </div>
@@ -141,6 +175,15 @@
 </div>
 
 <input type="file" id="attach-file-input" accept="image/*,application/pdf" hidden>
+
+<!-- Optional cloud sync for shared trips. Only activates once firebase-config.js
+     has a real project's keys — see that file and the README for setup. If these
+     fail to load (no network, or sharing not configured), the app degrades
+     gracefully to fully local/offline, same as always. -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="cloud-sync.js"></script>
 
 <script src="app.js"></script>
 </body>

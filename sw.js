@@ -1,9 +1,11 @@
-const CACHE_NAME = 'globing-cache-v11';
+const CACHE_NAME = 'globing-cache-v13';
 const APP_SHELL = [
   './',
   './index.html',
   './style.css',
   './app.js',
+  './firebase-config.js',
+  './cloud-sync.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
