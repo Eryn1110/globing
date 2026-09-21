@@ -558,6 +558,7 @@ body {
 .day-tabs::-webkit-scrollbar { display: none; }
 
 .day-tab {
+  position: relative;
   flex-shrink: 0;
   background: var(--paper-raised);
   border: 1px solid var(--line);
@@ -566,6 +567,25 @@ body {
   text-align: center;
   cursor: pointer;
   min-width: 52px;
+}
+
+.day-tab.completed {
+  border-color: var(--accent);
+}
+
+.day-tab-check {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #FFFFFF;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--paper-raised);
 }
 
 .day-tab.active {
@@ -598,11 +618,42 @@ body {
   padding: 14px 16px 0;
 }
 
+.day-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
 .day-date-heading {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 17px;
-  margin: 0 0 10px;
+  margin: 0;
+  min-width: 0;
+}
+
+.day-done-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.day-done-toggle.done {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+  color: #FFFFFF;
 }
 
 .notes-block {
@@ -743,6 +794,29 @@ body {
 
 .activity-ticket::placeholder {
   color: #A9BBB8;
+}
+
+.activity-cost {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent-deep);
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 2px 2px;
+  font-family: var(--font-body);
+}
+
+.activity-cost::placeholder {
+  color: #A9BBB8;
+  font-weight: 400;
+}
+
+.activity-cost:focus {
+  outline: none;
+  background: #EAF7EC;
+  border-radius: 4px;
 }
 
 .activity-ticket:focus {

@@ -77,10 +77,13 @@ function getTrip(id) {
 
 function ensureDay(trip, dateStr) {
   if (!trip.days[dateStr]) {
-    trip.days[dateStr] = { notes: '', activities: [] };
+    trip.days[dateStr] = { notes: '', activities: [], completed: false };
   }
   if (!trip.days[dateStr].activities) {
     trip.days[dateStr].activities = [];
+  }
+  if (typeof trip.days[dateStr].completed !== 'boolean') {
+    trip.days[dateStr].completed = false;
   }
   return trip.days[dateStr];
 }
@@ -99,7 +102,7 @@ async function migrateLegacyDays() {
           const slot = day.slots[time];
           if (!slot || (!slot.title && !slot.ticket)) continue;
           const newId = uid();
-          day.activities.push({ id: newId, time, title: slot.title || '', ticket: slot.ticket || '' });
+          day.activities.push({ id: newId, time, title: slot.title || '', ticket: slot.ticket || '', cost: '' });
           const oldKey = `slot-${trip.id}-${dateStr}-${time}`;
           const newKey = `activity-${trip.id}-${dateStr}-${newId}`;
           try {
@@ -602,9 +605,14 @@ function renderDayTabs(trip) {
   dayTabsEl.innerHTML = '';
   const days = getDaysArray(trip.startDate, trip.endDate);
   days.forEach((dateStr, i) => {
+    const day = ensureDay(trip, dateStr);
     const tab = document.createElement('div');
-    tab.className = 'day-tab' + (dateStr === activeDayDate ? ' active' : '');
-    tab.innerHTML = `<span class="day-tab-num">${i + 1}</span><span class="day-tab-dow">${dayOfWeekShort(dateStr)} ${formatDateShort(dateStr).split(' ')[1]}</span>`;
+    tab.className = 'day-tab' + (dateStr === activeDayDate ? ' active' : '') + (day.completed ? ' completed' : '');
+    tab.innerHTML = `
+      ${day.completed ? '<span class="day-tab-check">✓</span>' : ''}
+      <span class="day-tab-num">${i + 1}</span>
+      <span class="day-tab-dow">${dayOfWeekShort(dateStr)} ${formatDateShort(dateStr).split(' ')[1]}</span>
+    `;
     tab.addEventListener('click', () => {
       activeDayDate = dateStr;
       renderDayTabs(trip);
@@ -620,10 +628,27 @@ function renderDayView(trip, dateStr) {
   const day = ensureDay(trip, dateStr);
   dayViewEl.innerHTML = '';
 
+  const headingRow = document.createElement('div');
+  headingRow.className = 'day-heading-row';
+
   const heading = document.createElement('p');
   heading.className = 'day-date-heading';
   heading.textContent = formatDateHeading(dateStr);
-  dayViewEl.appendChild(heading);
+
+  const doneToggle = document.createElement('button');
+  doneToggle.type = 'button';
+  doneToggle.className = 'day-done-toggle' + (day.completed ? ' done' : '');
+  doneToggle.textContent = day.completed ? '✓ Day done' : 'Mark day done';
+  doneToggle.addEventListener('click', () => {
+    day.completed = !day.completed;
+    saveState();
+    renderDayView(trip, dateStr);
+    renderDayTabs(trip);
+  });
+
+  headingRow.appendChild(heading);
+  headingRow.appendChild(doneToggle);
+  dayViewEl.appendChild(headingRow);
 
   const notesBlock = document.createElement('div');
   notesBlock.className = 'notes-block';
@@ -661,7 +686,7 @@ function renderDayView(trip, dateStr) {
   addBtn.textContent = '+ Add activity';
   addBtn.addEventListener('click', () => {
     const lastTime = sorted.length ? sorted[sorted.length - 1].time : '09:00';
-    const newActivity = { id: uid(), time: lastTime, title: '', ticket: '' };
+    const newActivity = { id: uid(), time: lastTime, title: '', ticket: '', cost: '' };
     day.activities.push(newActivity);
     saveState();
     renderDayView(trip, dateStr);
@@ -707,17 +732,26 @@ function buildActivityRow(trip, dateStr, day, activity) {
   ticketInput.placeholder = 'Ticket / booking ref';
   ticketInput.value = activity.ticket || '';
 
+  const costInput = document.createElement('input');
+  costInput.type = 'text';
+  costInput.className = 'activity-cost';
+  costInput.placeholder = 'Cost, e.g. Ivan, 36 CAD';
+  costInput.value = activity.cost || '';
+
   const commitText = debounce(() => {
     activity.title = titleInput.value.trim();
     activity.ticket = ticketInput.value.trim();
+    activity.cost = costInput.value.trim();
     saveState();
   }, 300);
   titleInput.addEventListener('input', commitText);
   ticketInput.addEventListener('input', commitText);
+  costInput.addEventListener('input', commitText);
 
   const ticketRow = document.createElement('div');
   ticketRow.className = 'activity-ticket-row';
   ticketRow.appendChild(ticketInput);
+  ticketRow.appendChild(costInput);
   ticketRow.appendChild(buildAttachControl(`activity-${trip.id}-${dateStr}-${activity.id}`));
 
   body.appendChild(titleInput);
