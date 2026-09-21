@@ -7,7 +7,7 @@ A small, self-contained web app for planning trips hour by hour: a travel period
 ## 1. Put it on GitHub
 
 1. Create a new repository on GitHub (e.g. `globing`), public or private.
-2. Upload all the files in this folder (`index.html`, `style.css`, `app.js`, `manifest.json`, `sw.js`, `icon-192.png`, `icon-512.png`, `README.md`) to the repo root — either drag-and-drop in the GitHub web UI ("Add file → Upload files"), or:
+2. Upload all the files in this folder (`index.html`, `style.css`, `app.js`, `manifest.json`, `sw.js`, `icon-192.png`, `icon-512.png`, `bg-art.jpg`, `README.md`) to the repo root — either drag-and-drop in the GitHub web UI ("Add file → Upload files"), or:
    ```bash
    cd globing
    git init

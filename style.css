@@ -1,20 +1,23 @@
 /* ---------------------------------------------------------
-   Globing — design tokens
-   Ink:    #14213D  (deep navy, primary ink/surface)
-   Paper:  #F6F3EA  (warm paper background)
-   Amber:  #E2A33D  (route-stamp accent)
-   Line:   #D8D0BC  (hairline / rule)
+   Globing — design tokens (sampled from the app icon, boosted for a cute/vivid feel)
+   Ink:    #123C4A  (deep ocean teal, primary ink/surface)
+   Paper:  #EAF7FB  (pale sky-blue paper background)
+   Blue:   #29ABE2  (vivid sky blue, primary action color — the icon's ocean)
+   Green:  #3FBE55  (vivid leaf green, accent/highlight color — the icon's land)
+   Line:   #CDEAF2  (hairline / rule)
    Rust:   #A64B3C  (danger / delete)
    --------------------------------------------------------- */
 
 :root {
-  --ink: #14213D;
-  --ink-soft: #3B4A6B;
-  --paper: #F6F3EA;
+  --ink: #123C4A;
+  --ink-soft: #3E7182;
+  --paper: #EAF7FB;
   --paper-raised: #FFFFFF;
-  --amber: #E2A33D;
-  --amber-deep: #B9791F;
-  --line: #D8D0BC;
+  --blue: #29ABE2;
+  --blue-deep: #1483B5;
+  --accent: #3FBE55;
+  --accent-deep: #268C3A;
+  --line: #CDEAF2;
   --rust: #A64B3C;
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -30,7 +33,9 @@
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--paper);
+  background:
+    linear-gradient(rgba(234, 247, 251, 0.65), rgba(234, 247, 251, 0.65)),
+    url('bg-art.jpg') center top / cover no-repeat;
   color: var(--ink);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
@@ -68,7 +73,7 @@ body {
   gap: 10px;
   padding: calc(14px + var(--safe-top)) 16px 14px;
   border-bottom: 1px solid var(--line);
-  background: var(--paper);
+  background: transparent;
   flex-shrink: 0;
 }
 
@@ -132,8 +137,8 @@ body {
 }
 
 .icon-btn:active {
-  background: var(--amber);
-  border-color: var(--amber-deep);
+  background: var(--accent);
+  border-color: var(--accent-deep);
 }
 
 /* ---------- Scroll area ---------- */
@@ -194,7 +199,7 @@ body {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 4px;
-  background: var(--amber);
+  background: var(--accent);
 }
 
 .trip-card-name {
@@ -257,9 +262,10 @@ body {
 }
 
 .btn-new-trip:active {
-  background: var(--amber);
-  border-color: var(--amber-deep);
+  background: var(--blue);
+  border-color: var(--blue-deep);
   border-style: solid;
+  color: #FFFFFF;
 }
 
 .form-card {
@@ -304,7 +310,7 @@ body {
 }
 
 .field input:focus, .field textarea:focus {
-  outline: 2px solid var(--amber);
+  outline: 2px solid var(--blue);
   outline-offset: 1px;
 }
 
@@ -314,8 +320,8 @@ body {
 }
 
 .btn-primary {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--blue);
+  color: #FFFFFF;
   border: none;
   border-radius: 7px;
   padding: 12px;
@@ -325,11 +331,11 @@ body {
   cursor: pointer;
 }
 
-.btn-primary:active { background: var(--ink-soft); }
+.btn-primary:active { background: var(--blue-deep); }
 
 .btn-small {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--blue);
+  color: #FFFFFF;
   border: none;
   border-radius: 7px;
   padding: 9px 14px;
@@ -509,12 +515,12 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #FFF3D9;
-  border: 1px solid var(--amber);
+  background: #E6F5E4;
+  border: 1px solid var(--accent);
   border-radius: 6px;
   padding: 3px 6px;
   font-size: 11px;
-  color: var(--amber-deep);
+  color: var(--accent-deep);
   cursor: pointer;
   max-width: 110px;
   flex-shrink: 0;
@@ -529,7 +535,7 @@ body {
 .attach-chip .attach-remove {
   border: none;
   background: none;
-  color: var(--amber-deep);
+  color: var(--accent-deep);
   font-size: 12px;
   cursor: pointer;
   padding: 0;
@@ -563,8 +569,8 @@ body {
 }
 
 .day-tab.active {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--blue);
+  border-color: var(--blue-deep);
 }
 
 .day-tab-num {
@@ -576,7 +582,7 @@ body {
 
 .day-tab.active .day-tab-num,
 .day-tab.active .day-tab-dow {
-  color: var(--paper);
+  color: #FFFFFF;
 }
 
 .day-tab-dow {
@@ -620,105 +626,171 @@ body {
   padding: 10px 11px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #FFFDF8;
+  background: #F7FBFA;
 }
 
 .notes-block textarea:focus {
-  outline: 2px solid var(--amber);
+  outline: 2px solid var(--blue);
   outline-offset: 1px;
 }
 
-.slot-grid {
-  border-top: 1px solid var(--line);
-}
-
-.slot-row {
-  display: grid;
-  grid-template-columns: 52px 1fr;
-  border-bottom: 1px solid var(--line);
-  min-height: 46px;
-}
-
-.slot-row.hour-start {
-  border-top: 1px solid var(--ink);
-}
-
-.slot-time {
-  padding: 9px 0 0;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-  text-align: right;
-  padding-right: 8px;
-}
-
-.slot-row.hour-start .slot-time {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.slot-fields {
+.activity-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 6px 0 6px 10px;
-  border-left: 1px solid var(--line);
+  gap: 10px;
+  padding-bottom: 4px;
 }
 
-.slot-fields input {
+.activity-empty {
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 22px 10px;
+  margin: 0;
+}
+
+.activity-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.activity-row::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--accent);
+}
+
+.activity-time-col {
+  flex-shrink: 0;
+  padding-left: 6px;
+}
+
+.activity-time-input {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 4px;
+  background: var(--paper);
+  color: var(--ink);
+  width: 128px;
+  min-width: 128px;
+}
+
+.activity-time-input:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.activity-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.activity-title {
+  font-size: 15px;
+  font-weight: 500;
   border: none;
   background: transparent;
-  font-family: var(--font-body);
   padding: 2px 2px;
   color: var(--ink);
   width: 100%;
+  font-family: var(--font-body);
 }
 
-.slot-fields input:focus {
-  outline: none;
-  background: #FFF7E6;
-  border-radius: 4px;
-}
-
-.slot-input-attraction {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.slot-input-attraction::placeholder {
-  color: #B9B2A0;
+.activity-title::placeholder {
+  color: #9AAFAC;
   font-weight: 400;
 }
 
-.slot-ticket-row {
+.activity-title:focus {
+  outline: none;
+  background: #EAF7EC;
+  border-radius: 4px;
+}
+
+.activity-ticket-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.slot-input-ticket {
-  font-size: 12px;
+.activity-ticket {
+  font-size: 12.5px;
   color: var(--ink-soft);
   flex: 1;
   min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 2px 2px;
+  font-family: var(--font-body);
 }
 
-.slot-input-ticket::placeholder {
-  color: #C7C1B2;
+.activity-ticket::placeholder {
+  color: #A9BBB8;
 }
 
-.slot-row.filled {
-  background: #FFFDF6;
+.activity-ticket:focus {
+  outline: none;
+  background: #EAF7EC;
+  border-radius: 4px;
 }
 
-.slot-row.filled .slot-fields {
-  border-left: 2px solid var(--amber);
+.activity-delete {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 4px;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.activity-delete:active {
+  opacity: 1;
+}
+
+.btn-add-activity {
+  margin-top: 2px;
+  background: var(--paper-raised);
+  border: 1px dashed var(--ink-soft);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-add-activity:active {
+  background: var(--blue);
+  border-color: var(--blue-deep);
+  border-style: solid;
+  color: #FFFFFF;
 }
 
 /* ---------- Misc ---------- */
 
 ::selection {
-  background: var(--amber);
+  background: var(--accent);
   color: var(--ink);
 }
 

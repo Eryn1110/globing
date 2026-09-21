@@ -4,16 +4,6 @@
 
 const STORAGE_KEY = 'globing-state-v1';
 
-const TIME_SLOTS = (() => {
-  const slots = [];
-  for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    }
-  }
-  return slots;
-})();
-
 // ---------- State ----------
 
 function loadState() {
@@ -87,9 +77,45 @@ function getTrip(id) {
 
 function ensureDay(trip, dateStr) {
   if (!trip.days[dateStr]) {
-    trip.days[dateStr] = { notes: '', slots: {} };
+    trip.days[dateStr] = { notes: '', activities: [] };
+  }
+  if (!trip.days[dateStr].activities) {
+    trip.days[dateStr].activities = [];
   }
   return trip.days[dateStr];
+}
+
+// One-time upgrade for trips created before the switch from a fixed
+// 30-minute grid to an add-activities-as-you-go list. Turns any leftover
+// day.slots entries into day.activities, carrying attachments across too.
+async function migrateLegacyDays() {
+  let changed = false;
+  for (const trip of state.trips) {
+    for (const dateStr in trip.days) {
+      const day = trip.days[dateStr];
+      if (day.slots) {
+        day.activities = day.activities || [];
+        for (const time in day.slots) {
+          const slot = day.slots[time];
+          if (!slot || (!slot.title && !slot.ticket)) continue;
+          const newId = uid();
+          day.activities.push({ id: newId, time, title: slot.title || '', ticket: slot.ticket || '' });
+          const oldKey = `slot-${trip.id}-${dateStr}-${time}`;
+          const newKey = `activity-${trip.id}-${dateStr}-${newId}`;
+          try {
+            const record = await getAttachment(oldKey);
+            if (record) {
+              await saveAttachment(newKey, record.name, record.type, record.dataUrl);
+              await deleteAttachment(oldKey);
+            }
+          } catch (e) { /* no attachment for that slot — fine */ }
+        }
+        delete day.slots;
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveState();
 }
 
 // ---------- Attachments (ticket photos/PDFs, stored in IndexedDB) ----------
@@ -588,7 +614,7 @@ function renderDayTabs(trip) {
   });
 }
 
-// ---------- Day view: notes + 30-min slot grid ----------
+// ---------- Day view: notes + activity list (add one at a time) ----------
 
 function renderDayView(trip, dateStr) {
   const day = ensureDay(trip, dateStr);
@@ -613,74 +639,106 @@ function renderDayView(trip, dateStr) {
   notesBlock.appendChild(notesArea);
   dayViewEl.appendChild(notesBlock);
 
-  const grid = document.createElement('div');
-  grid.className = 'slot-grid';
+  const list = document.createElement('div');
+  list.className = 'activity-list';
 
-  TIME_SLOTS.forEach(time => {
-    const row = document.createElement('div');
-    const isHourStart = time.endsWith(':00');
-    row.className = 'slot-row' + (isHourStart ? ' hour-start' : '');
+  const sorted = [...day.activities].sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
-    const slotData = day.slots[time] || { title: '', ticket: '' };
-    if (slotData.title || slotData.ticket) row.classList.add('filled');
+  if (sorted.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'activity-empty';
+    empty.textContent = 'Nothing planned yet — add the first activity below.';
+    list.appendChild(empty);
+  }
 
-    const timeEl = document.createElement('div');
-    timeEl.className = 'slot-time';
-    timeEl.textContent = isHourStart ? formatHourLabel(time) : '';
-
-    const fields = document.createElement('div');
-    fields.className = 'slot-fields';
-
-    const attractionInput = document.createElement('input');
-    attractionInput.type = 'text';
-    attractionInput.className = 'slot-input-attraction';
-    attractionInput.placeholder = 'Add attraction / plan';
-    attractionInput.value = slotData.title || '';
-
-    const ticketInput = document.createElement('input');
-    ticketInput.type = 'text';
-    ticketInput.className = 'slot-input-ticket';
-    ticketInput.placeholder = 'Ticket / booking ref';
-    ticketInput.value = slotData.ticket || '';
-
-    const commit = debounce(() => {
-      const title = attractionInput.value.trim();
-      const ticket = ticketInput.value.trim();
-      if (!title && !ticket) {
-        delete day.slots[time];
-        row.classList.remove('filled');
-      } else {
-        day.slots[time] = { title, ticket };
-        row.classList.add('filled');
-      }
-      saveState();
-    }, 300);
-
-    attractionInput.addEventListener('input', commit);
-    ticketInput.addEventListener('input', commit);
-
-    const ticketRow = document.createElement('div');
-    ticketRow.className = 'slot-ticket-row';
-    ticketRow.appendChild(ticketInput);
-    ticketRow.appendChild(buildAttachControl(`slot-${trip.id}-${dateStr}-${time}`));
-
-    fields.appendChild(attractionInput);
-    fields.appendChild(ticketRow);
-
-    row.appendChild(timeEl);
-    row.appendChild(fields);
-    grid.appendChild(row);
+  sorted.forEach(activity => {
+    list.appendChild(buildActivityRow(trip, dateStr, day, activity));
   });
 
-  dayViewEl.appendChild(grid);
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn-add-activity';
+  addBtn.textContent = '+ Add activity';
+  addBtn.addEventListener('click', () => {
+    const lastTime = sorted.length ? sorted[sorted.length - 1].time : '09:00';
+    const newActivity = { id: uid(), time: lastTime, title: '', ticket: '' };
+    day.activities.push(newActivity);
+    saveState();
+    renderDayView(trip, dateStr);
+    // Focus the newly added row's title field.
+    const row = dayViewEl.querySelector(`[data-activity-id="${newActivity.id}"] .activity-title`);
+    if (row) row.focus();
+  });
+  list.appendChild(addBtn);
+
+  dayViewEl.appendChild(list);
 }
 
-function formatHourLabel(time) {
-  const [h] = time.split(':').map(Number);
-  const period = h < 12 ? 'AM' : 'PM';
-  let h12 = h % 12;
-  if (h12 === 0) h12 = 12;
-  return `${h12}${period}`;
+function buildActivityRow(trip, dateStr, day, activity) {
+  const row = document.createElement('div');
+  row.className = 'activity-row';
+  row.dataset.activityId = activity.id;
+
+  const timeCol = document.createElement('div');
+  timeCol.className = 'activity-time-col';
+  const timeInput = document.createElement('input');
+  timeInput.type = 'time';
+  timeInput.className = 'activity-time-input';
+  timeInput.value = activity.time || '09:00';
+  timeInput.addEventListener('change', () => {
+    activity.time = timeInput.value;
+    saveState();
+    renderDayView(trip, dateStr); // re-sort into chronological order
+  });
+  timeCol.appendChild(timeInput);
+
+  const body = document.createElement('div');
+  body.className = 'activity-body';
+
+  const titleInput = document.createElement('input');
+  titleInput.type = 'text';
+  titleInput.className = 'activity-title';
+  titleInput.placeholder = 'What are you doing? e.g. Heading to Pearson';
+  titleInput.value = activity.title || '';
+
+  const ticketInput = document.createElement('input');
+  ticketInput.type = 'text';
+  ticketInput.className = 'activity-ticket';
+  ticketInput.placeholder = 'Ticket / booking ref';
+  ticketInput.value = activity.ticket || '';
+
+  const commitText = debounce(() => {
+    activity.title = titleInput.value.trim();
+    activity.ticket = ticketInput.value.trim();
+    saveState();
+  }, 300);
+  titleInput.addEventListener('input', commitText);
+  ticketInput.addEventListener('input', commitText);
+
+  const ticketRow = document.createElement('div');
+  ticketRow.className = 'activity-ticket-row';
+  ticketRow.appendChild(ticketInput);
+  ticketRow.appendChild(buildAttachControl(`activity-${trip.id}-${dateStr}-${activity.id}`));
+
+  body.appendChild(titleInput);
+  body.appendChild(ticketRow);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'activity-delete';
+  deleteBtn.setAttribute('aria-label', 'Remove activity');
+  deleteBtn.textContent = '🗑';
+  deleteBtn.addEventListener('click', () => {
+    day.activities = day.activities.filter(a => a.id !== activity.id);
+    deleteAttachment(`activity-${trip.id}-${dateStr}-${activity.id}`).catch(() => {});
+    saveState();
+    renderDayView(trip, dateStr);
+  });
+
+  row.appendChild(timeCol);
+  row.appendChild(body);
+  row.appendChild(deleteBtn);
+  return row;
 }
 
 function debounce(fn, wait) {
@@ -755,3 +813,12 @@ renderTripList();
 if (state.activeTripId && getTrip(state.activeTripId)) {
   openTrip(state.activeTripId);
 }
+
+// Upgrade any trips saved under the old fixed time-grid format, then
+// re-render whichever page is showing so the converted data appears.
+migrateLegacyDays().then(() => {
+  renderTripList();
+  if (state.activeTripId && getTrip(state.activeTripId)) {
+    renderTripDetail(getTrip(state.activeTripId));
+  }
+});
